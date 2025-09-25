@@ -1,0 +1,3 @@
+﻿# CosmoDoorstop
+
+This is a stripped version of [Unity Doorstop](https://github.com/NeighTools/UnityDoorstop) that is tailored specifically for Cosmoteer. On launch it hooks onto `GetProcAddress` function (just like Doorstop does) and intercept the call for the function `hostfxr_main_startupinfo` which is what Cosmoteer uses to start a .NET environment. It then replaces `Cosmoteer.dll` with `ModLoader.dll` as an entry point.
