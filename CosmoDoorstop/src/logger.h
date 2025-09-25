@@ -1,18 +1,20 @@
 #ifndef LOGGER_WIN_H
 #define LOGGER_WIN_H
-#if VERBOSE
 
 #include <windows.h>
-#include "wincrt.h"
-
-extern HANDLE log_handle;
-extern char_t buffer[4096];
 
 #ifdef UNICODE
 #define printf wsprintfW
 #else
 #define printf wsprintfA
 #endif
+
+#if VERBOSE
+
+#include "wincrt.h"
+
+extern HANDLE log_handle;
+extern char_t buffer[4096];
 
 static inline void init_logger(char_t *path) {
     printf(buffer, TEXT("\\\\\?\\C:\\Program Files (x86)\\Steam\\steamapps\\common\\Cosmoteer\\Bin\\doorstop_%lx.log"), GetTickCount());
