@@ -9,11 +9,16 @@ namespace ModLoader
 
     public class ModLoader
     {
-
+        /// <summary>
+        /// This is a dummy method to call functions that has UnmanagedCallersOnly attributes
+        /// </summary>
+        /// <param name="funcPtr">The pointer to the function to be called</param>
         [DllImport("winmm.dll", CallingConvention = CallingConvention.Winapi)]
         public static unsafe extern void CallFromUnmanaged(IntPtr funcPtr);
 
-
+        /// <summary>
+        /// The main entrypoint. Here we do the minimum game init to get the location of the settings file.
+        /// </summary>
         [STAThread]
         static public void Main(string[] argv)
         {
@@ -50,7 +55,7 @@ namespace ModLoader
 
                     foreach (var file in Directory.EnumerateFiles(mod, "*.dll", SearchOption.AllDirectories))
                     {
-                        Console.WriteLine($"[Mod Preloader] foun dll file {file}");
+                        Console.WriteLine($"[Mod Preloader] found dll file {file}");
 
                         // not the best way to distinguish harmony, but should work
                         if (file.EndsWith("0Harmony.dll"))
@@ -105,12 +110,12 @@ namespace ModLoader
                                     if (method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>() == null)
                                     {
                                         method.Invoke(null, null);
-                                        Console.WriteLine($"[Mod Preloader] called init metod for user lib {lib}");
+                                        Console.WriteLine($"[Mod Preloader] called init method {method.Name} for mod lib {lib}");
                                     }
                                     else
                                     {
                                         CallFromUnmanaged(method.MethodHandle.GetFunctionPointer());
-                                        Console.WriteLine($"[Mod Preloader] called unmanaged init metod for user lib {lib}");
+                                        Console.WriteLine($"[Mod Preloader] called unmanaged init method {method.Name} for mod lib {lib}");
                                     }
                                 }
 
@@ -127,34 +132,45 @@ namespace ModLoader
                         Console.WriteLine($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex.ToString()}");
                     }
                 }
+                // start the async task for delayed initialization
                 DelayedInitializer = DelayedInit(delayedInitMethods);
             }
+            // start the actual game
             Cosmoteer.GameApp.Main(argv);
+
+            // close the task
             DelayedInitializer.Wait();
         }
 
+        /// <summary>
+        /// This is the async task that will wait until the game object is created, and then call
+        /// all the init methods from mods
+        /// </summary>
+        /// <param name="methods">The list of methods to call</param>
         static async Task DelayedInit(Dictionary<MethodInfo, string> methods)
         {
+            // wait for director to appear, which means the GameApp constructor has finished
             while (Halfling.App.Director == null) await Task.Delay(10);
 
             foreach(var (method, lib) in methods)
             {
                 try
                 {
+                    // here the logger is already initialized
                     if (method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>() == null)
                     {
                         method.Invoke(null, null);
-                        Console.WriteLine($"[Mod Preloader] called delayed init metod for user lib {lib}");
+                        Halfling.Logging.Logger.Log($"[Mod Preloader] called delayed init method {method.Name} for mod lib {lib}");
                     }
                     else
                     {
                         CallFromUnmanaged(method.MethodHandle.GetFunctionPointer());
-                        Console.WriteLine($"[Mod Preloader] called delayed unmanaged init metod for user lib {lib}");
+                        Halfling.Logging.Logger.Log($"[Mod Preloader] called delayed unmanaged init method {method.Name} for mod lib {lib}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex.ToString()}");
+                    Halfling.Logging.Logger.Log($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex.ToString()}");
                 }
             }
 
