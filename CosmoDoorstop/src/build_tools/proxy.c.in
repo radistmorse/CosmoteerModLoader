@@ -1,0 +1,15 @@
+/* ==================================
+ * COMPUTER GENERATED -- DO NOT EDIT
+ * ==================================
+ */
+
+#include <windows.h>
+
+${PROXY_DEFS}
+
+void load_functions(void *dll)
+{
+${PROXY_ADDS}
+}
+
+${PROXY_FUNCS}
