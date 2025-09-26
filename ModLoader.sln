@@ -1,18 +1,18 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36518.9 d17.14
+VisualStudioVersion = 17.14.36518.9
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModLoader", "ModLoader.csproj", "{0E677769-6CDC-482C-9969-58DE490DC845}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
+		Release Proton|Any CPU = Release Proton|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{0E677769-6CDC-482C-9969-58DE490DC845}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0E677769-6CDC-482C-9969-58DE490DC845}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E677769-6CDC-482C-9969-58DE490DC845}.Release Proton|Any CPU.ActiveCfg = Release Proton|Any CPU
+		{0E677769-6CDC-482C-9969-58DE490DC845}.Release Proton|Any CPU.Build.0 = Release Proton|Any CPU
 		{0E677769-6CDC-482C-9969-58DE490DC845}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0E677769-6CDC-482C-9969-58DE490DC845}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection

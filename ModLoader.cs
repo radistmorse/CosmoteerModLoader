@@ -13,7 +13,11 @@ namespace ModLoader
         /// This is a dummy method to call functions that has UnmanagedCallersOnly attributes
         /// </summary>
         /// <param name="funcPtr">The pointer to the function to be called</param>
+#if PROTON
+        [DllImport("version.dll", CallingConvention = CallingConvention.Winapi)]
+#else
         [DllImport("winmm.dll", CallingConvention = CallingConvention.Winapi)]
+#endif
         public static unsafe extern void CallFromUnmanaged(IntPtr funcPtr);
 
         /// <summary>
@@ -29,7 +33,7 @@ namespace ModLoader
                 Cosmoteer.Steamworks.Steam.Init();
                 // we need to remove the callback that was added by init, or the game will not launch
                 // (it will try to add it again)
-                foreach (var callback in Cosmoteer.Steamworks.Steam.s_callbacks.Select(pair => pair.Value as Steamworks.Callback<Steamworks.GameOverlayActivated_t>))
+                foreach (var callback in Cosmoteer.Steamworks.Steam.s_callbacks.Select(pair => pair.Value as IDisposable))
                     callback?.Dispose();
                 Cosmoteer.Steamworks.Steam.s_callbacks.Clear();
 
