@@ -12,6 +12,7 @@ option("include_logging")
 target("cosmodoorstop")
     set_kind("shared")
     set_optimize("smallest")
+    set_basename("winmm")
     add_options("include_logging")
     local load_events = {}
 
@@ -25,24 +26,35 @@ target("cosmodoorstop")
 	add_defines("UNICODE")
 	add_links("shell32", "kernel32", "user32")
 
-    if is_plat("windows") then
-        add_cxflags("-GS-", "-Ob2", "-MT", "-GL-", "-FS")
-        add_shflags("-nodefaultlib",
-                    "-entry:DllEntry",
-                    "-dynamicbase:no",
-                    {force=true})
-    end
+    add_cxflags("-GS-", "-Ob2", "-MT", "-GL-", "-FS")
+    add_shflags("-nodefaultlib",
+                "-entry:DllEntry",
+                "-dynamicbase:no",
+                {force=true})
 
-    if is_plat("mingw") then
-        add_shflags("-nostdlib", "-nolibc", {force=true})
-
-        if is_arch("i386") then
-            add_shflags("-e _DllEntry", "-Wl,--enable-stdcall-fixup", {force=true})
-        elseif is_arch("x64", "x86_64") then
-            add_shflags("-e DllEntry", {force=true})
+    on_load(function(target)
+        for i, event in ipairs(load_events) do
+            event(target, import, io)
         end
-    end
+    end)
 
+target("unmanaged")
+    set_kind("shared")
+    set_optimize("smallest")
+    local load_events = {}
+
+   	includes("src/build_tools/rcgen.lua")
+	add_rc(load_events, info)
+
+	add_files("src/unmanaged.c")
+    add_files("src/unmanaged.def")
+	add_defines("STANDALONE")
+
+    add_cxflags("-GS-", "-Ob2", "-MT", "-GL-", "-FS")
+    add_shflags("-nodefaultlib",
+                "-entry:DllEntry",
+                {force=true})
+    
     on_load(function(target)
         for i, event in ipairs(load_events) do
             event(target, import, io)

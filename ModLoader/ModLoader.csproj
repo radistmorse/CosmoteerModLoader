@@ -7,16 +7,11 @@
     <PlatformTarget>x64</PlatformTarget>
     <OutputType>Exe</OutputType>
     <StartupObject>ModLoader.ModLoader</StartupObject>
-    <Configurations>Release;Release Proton</Configurations>
+    <Configurations>Release</Configurations>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DebugType>none</DebugType>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release Proton|AnyCPU'">
-    <DebugType>none</DebugType>
-    <DefineConstants>$(DefineConstants);PROTON</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,17 +22,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Cosmoteer">
-      <HintPath>..\libs\Cosmoteer.dll</HintPath>
-    </Reference>
-    <Reference Include="HalflingCore">
-      <HintPath>..\libs\HalflingCore.dll</HintPath>
-    </Reference>
+    <Publicize Include="Cosmoteer" IncludeCompilerGeneratedMembers="false" />
+    <Publicize Include="HalflingCore" IncludeCompilerGeneratedMembers="false" />
   </ItemGroup>
 
   <ItemGroup>
-    <Publicize Include="Cosmoteer" IncludeCompilerGeneratedMembers="false" />
-    <Publicize Include="HalflingCore" IncludeCompilerGeneratedMembers="false" />
+    <Reference Include="Cosmoteer">
+      <HintPath>..\..\libs\Cosmoteer.dll</HintPath>
+    </Reference>
+    <Reference Include="HalflingCore">
+      <HintPath>..\..\libs\HalflingCore.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

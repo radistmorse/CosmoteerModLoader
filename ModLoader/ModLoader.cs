@@ -7,18 +7,48 @@ using System.Runtime.Loader;
 namespace ModLoader
 {
 
-    public class ModLoader
+    public partial class ModLoader
     {
         /// <summary>
         /// This is a dummy method to call functions that has UnmanagedCallersOnly attributes
         /// </summary>
         /// <param name="funcPtr">The pointer to the function to be called</param>
-#if PROTON
-        [DllImport("version.dll", CallingConvention = CallingConvention.Winapi)]
-#else
-        [DllImport("winmm.dll", CallingConvention = CallingConvention.Winapi)]
-#endif
-        public static unsafe extern void CallFromUnmanaged(IntPtr funcPtr);
+        private static readonly Action<IntPtr> CallFromUnmanaged;
+
+        [LibraryImport("winmm.dll", EntryPoint = "CallFromUnmanaged")]
+        private static unsafe partial void CallFromUnmanagedWinmm(IntPtr funcPtr);
+
+        [LibraryImport("unmanaged.dll", EntryPoint = "CallFromUnmanaged")]
+        private static unsafe partial void CallFromUnmanagedVersion(IntPtr funcPtr);
+
+
+        static ModLoader() {
+            try
+            {
+                // on windows we use winmm.dll
+                Marshal.Prelink(((Action<IntPtr>)CallFromUnmanagedWinmm).Method);
+                CallFromUnmanaged = CallFromUnmanagedWinmm;
+            }
+            catch (Exception)
+            {
+                // ignore
+            }
+            try
+            {
+                // on proton/linux we use version.dll
+                Marshal.Prelink(((Action<IntPtr>)CallFromUnmanagedVersion).Method);
+                CallFromUnmanaged = CallFromUnmanagedVersion;
+            }
+            catch (Exception)
+            {
+                // ignore
+            }
+            if (CallFromUnmanaged == null)
+            {
+                throw new DllNotFoundException("Could not find a dll with the correct native method");
+            }
+        }
+
 
         /// <summary>
         /// The main entrypoint. Here we do the minimum game init to get the location of the settings file.
@@ -50,8 +80,9 @@ namespace ModLoader
                 var reader = serializer.CreateGenericSerialReader(settingsFile.MakeAtPath("GameSettings"));
                 var enabledMods = reader.ReadFromPath<HashSet<Halfling.IO.AbsolutePath>>(nameof(Cosmoteer.Settings.EnabledMods));
 
-                var libs = new HashSet<string>();
+                var libs = new Dictionary<string, string>();
                 string? harmonyLib = null;
+                Version? harmonyVer = null;
 
                 foreach (var mod in enabledMods)
                 {
@@ -61,14 +92,40 @@ namespace ModLoader
                     {
                         Console.WriteLine($"[Mod Preloader] found dll file {file}");
 
-                        // not the best way to distinguish harmony, but should work
-                        if (file.EndsWith("0Harmony.dll"))
+                        try
                         {
-                            harmonyLib = file;
+                            // we first try to load assembly name
+                            // if we try to load the assembly right away, it can corrupt
+                            // the context and throw an uncachable exeption. if we can get
+                            // the name that at least means that the dll is a manageable
+                            // assembly, and we can attempt to load it
+                            var name = AssemblyName.GetAssemblyName(file);
+                            if (name.Name == "0Harmony")
+                            {
+                                // pick the latest harmony version, if several are found
+                                if (harmonyVer == null || harmonyVer < name.Version) {
+                                    harmonyLib = file;
+                                    harmonyVer = name.Version;
+                                }
+                            }
+                            else
+                            {
+                                if (name.Name != null)
+                                {
+                                    if (!libs.TryGetValue(name.Name, out string? value))
+                                    {
+                                        libs.Add(name.Name, file);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Library {file} duplicates another library {value}, ignored");
+                                    }
+                                }
+                            }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            libs.Add(file);
+                            Console.WriteLine($"[Mod Preloader] failed to load lib from {file}, exception\n{ex}");
                         }
                     }
                 }
@@ -78,25 +135,18 @@ namespace ModLoader
                     try
                     {
                         AppContext.SetSwitch("System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization", false);
-
-                        // we first try to load assembly name
-                        // if we try to load the assembly right away, it can corrupt
-                        // the context and throw an uncachable exeption. if we can get
-                        // the name that at least means that the dll is a manageable
-                        // assembly, and we can attempt to load it
-                        AssemblyName.GetAssemblyName(harmonyLib);
                         AssemblyLoadContext.Default.LoadFromAssemblyPath(harmonyLib);
                         Console.WriteLine($"[Mod Preloader] loaded harmony lib from {harmonyLib}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Mod Preloader] failed to load harmony lib from {harmonyLib}, exception\n{ex.ToString()}");
+                        Console.WriteLine($"[Mod Preloader] failed to load harmony lib from {harmonyLib}, exception\n{ex}");
                     }
                 }
 
                 var delayedInitMethods = new Dictionary<MethodInfo, string>();
 
-                foreach (var lib in libs)
+                foreach (var lib in libs.Values)
                 {
                     try
                     {
@@ -133,7 +183,7 @@ namespace ModLoader
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex.ToString()}");
+                        Console.WriteLine($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex}");
                     }
                 }
                 // start the async task for delayed initialization
@@ -174,7 +224,7 @@ namespace ModLoader
                 }
                 catch (Exception ex)
                 {
-                    Halfling.Logging.Logger.Log($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex.ToString()}");
+                    Halfling.Logging.Logger.Log($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex}");
                 }
             }
 

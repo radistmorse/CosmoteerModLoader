@@ -47,7 +47,5 @@ function add_proxydef(load_events)
     end)
 
     add_files("build/proxy.c")
-
-    if is_plat("windows") then add_files("build/dll.def") end
-    if is_plat("mingw") then add_shflags("build/dll.def", {force = true}) end
+    add_files("build/dll.def")
 end

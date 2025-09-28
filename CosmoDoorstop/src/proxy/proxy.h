@@ -11,7 +11,7 @@ static inline void load_proxy(char_t *module_name) {
     size_t module_name_len = strlen(module_name);
 
     UINT sys_len = GetSystemDirectory(NULL, 0);
-    char_t *sys_full_path = (char_t *)malloc(
+    char_t *sys_full_path = (char_t *)heap_malloc(
         (sys_len + module_name_len) *
         sizeof(char_t));
     GetSystemDirectory(sys_full_path, sys_len);
@@ -20,8 +20,8 @@ static inline void load_proxy(char_t *module_name) {
 
     LOG("Looking for original DLL from %s", sys_full_path);
 
-    void *handle = dlopen(sys_full_path, RTLD_LAZY);
-    free(sys_full_path);
+    void *handle = LoadLibrary(sys_full_path);
+    heap_free(sys_full_path);
 
     ASSERT(handle != NULL, "Unable to load original %s.dll!", module_name);
 

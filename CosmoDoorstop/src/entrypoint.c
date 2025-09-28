@@ -20,15 +20,15 @@ struct {
 
 char_t *get_module_path(void *module) {
     DWORD i = 0;
-    DWORD len, s;
+    DWORD s;
     char_t *result = NULL;
     do {
         if (result != NULL)
-            free(result);
+            heap_free(result);
         i++;
         s = i * MAX_PATH + 1;
-        result = malloc(sizeof(char_t) * s);
-        len = GetModuleFileName(module, result, s);
+        result = heap_malloc(sizeof(char_t) * s);
+        GetModuleFileName(module, result, s);
     } while (GetLastError() == ERROR_INSUFFICIENT_BUFFER);
 
     return result;
@@ -57,7 +57,7 @@ int init_function_intercept(const int argc, const char_t** argv,
 
 
     size_t len = strlen(paths.app_dir);
-    char_t* assembly = malloc(
+    char_t* assembly = heap_malloc(
         (len + STR_LEN(ASSEMBLY_NAME) + 1) * sizeof(char_t));
 
     strcpy(assembly, paths.app_dir);
@@ -90,7 +90,7 @@ void *WINAPI get_proc_address_detour(void *module, char *name) {
         if (!initialized) {
             initialized = TRUE;
             LOG("Got %S at %p", name, module);
-			hostfxr_main_startupinfo = dlsym(module, INIT_FUNCTION);
+			hostfxr_main_startupinfo = (void *)GetProcAddress(module, INIT_FUNCTION);
             LOG("Loaded runtime function\n")
         }
         return (void *)(init_function_intercept);
@@ -99,7 +99,7 @@ void *WINAPI get_proc_address_detour(void *module, char *name) {
     return (void *)GetProcAddress(module, name);
 }
 
-void inject() {
+void inject(void) {
     LOG("Doorstop enabled!");
     HMODULE app_module = GetModuleHandle(NULL);
 
@@ -113,10 +113,6 @@ void inject() {
     } else {
         LOG("Hooks installed");
     }
-}
-
-void WINAPI CallFromUnmanaged(void (*func)()) {
-    func();
 }
 
 BOOL WINAPI DllEntry(HINSTANCE hInstDll, DWORD reasonForDllLoad,
