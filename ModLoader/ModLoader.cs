@@ -80,7 +80,10 @@ namespace ModLoader
                 var reader = serializer.CreateGenericSerialReader(settingsFile.MakeAtPath("GameSettings"));
                 var enabledMods = reader.ReadFromPath<HashSet<Halfling.IO.AbsolutePath>>(nameof(Cosmoteer.Settings.EnabledMods));
 
-                var libs = new Dictionary<string, string>();
+                // populate the dictionary with the already-loaded assemblies (i.e. ModLoader itself)
+                var libs = AssemblyLoadContext.Default.Assemblies.Select(ass => ass.GetName().Name??"")
+                                                                 .Where(name => name.Length > 0)
+                                                                 .ToDictionary(name => name, name=> "");
                 string? harmonyLib = null;
                 Version? harmonyVer = null;
 
@@ -146,7 +149,7 @@ namespace ModLoader
 
                 var delayedInitMethods = new Dictionary<MethodInfo, string>();
 
-                foreach (var lib in libs.Values)
+                foreach (var lib in libs.Values.Where(lib => lib.Length > 0))
                 {
                     try
                     {
@@ -160,7 +163,7 @@ namespace ModLoader
                             {
                                 if (method.Name == "AssemblyLoadInitializer" && method.GetParameters().Length == 0 && method.ReturnType == typeof(void))
                                 {
-                                    // EML required a special attribute, which prevents calling from manageable code
+                                    // EML required a special attribute, which prevents calling from managed code
                                     if (method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>() == null)
                                     {
                                         method.Invoke(null, null);
