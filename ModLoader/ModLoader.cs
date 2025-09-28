@@ -15,7 +15,7 @@ namespace ModLoader
         /// <param name="funcPtr">The pointer to the function to be called</param>
         private static readonly Action<IntPtr> CallFromUnmanaged;
 
-        [LibraryImport("winmm.dll", EntryPoint = "CallFromUnmanaged")]
+        [LibraryImport("avrt.dll", EntryPoint = "CallFromUnmanaged")]
         private static unsafe partial void CallFromUnmanagedWinmm(IntPtr funcPtr);
 
         [LibraryImport("unmanaged.dll", EntryPoint = "CallFromUnmanaged")]

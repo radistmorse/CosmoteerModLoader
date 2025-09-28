@@ -12,7 +12,7 @@ option("include_logging")
 target("cosmodoorstop")
     set_kind("shared")
     set_optimize("smallest")
-    set_basename("winmm")
+    set_basename("avrt")
     add_options("include_logging")
     local load_events = {}
 

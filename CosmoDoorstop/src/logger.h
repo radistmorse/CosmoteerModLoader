@@ -2,12 +2,11 @@
 #define LOGGER_WIN_H
 
 #include <windows.h>
-
-#if VERBOSE
-
 #include "wincrt.h"
 
 #define printf wsprintfW
+
+#if VERBOSE
 
 extern HANDLE log_handle;
 extern char_t buffer[4096];
@@ -50,7 +49,7 @@ inline char* narrow(const char_t* str) {
 
 #define LOG(message, ...)
 
-static inline void init_logger(char_t *) {}
+static inline void init_logger(char_t *path) {}
 static inline void free_logger(void) {}
 
 #endif
