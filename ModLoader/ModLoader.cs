@@ -15,9 +15,11 @@ namespace ModLoader
         /// <param name="funcPtr">The pointer to the function to be called</param>
         private static readonly Action<IntPtr> CallFromUnmanaged;
 
-        [LibraryImport("avrt.dll", EntryPoint = "CallFromUnmanaged")]
-        private static unsafe partial void CallFromUnmanagedWinmm(IntPtr funcPtr);
+        // dll-proxy
+        [LibraryImport("winmm.dll", EntryPoint = "CallFromUnmanaged")]
+        private static unsafe partial void CallFromUnmanagedAvrt(IntPtr funcPtr);
 
+        // non-dll-proxy
         [LibraryImport("unmanaged.dll", EntryPoint = "CallFromUnmanaged")]
         private static unsafe partial void CallFromUnmanagedVersion(IntPtr funcPtr);
 
@@ -25,9 +27,9 @@ namespace ModLoader
         static ModLoader() {
             try
             {
-                // on windows we use winmm.dll
-                Marshal.Prelink(((Action<IntPtr>)CallFromUnmanagedWinmm).Method);
-                CallFromUnmanaged = CallFromUnmanagedWinmm;
+                // case of dll-proxy (winmm.dll)
+                Marshal.Prelink(((Action<IntPtr>)CallFromUnmanagedAvrt).Method);
+                CallFromUnmanaged = CallFromUnmanagedAvrt;
             }
             catch (Exception)
             {
@@ -35,7 +37,7 @@ namespace ModLoader
             }
             try
             {
-                // on proton/linux we use version.dll
+                // case of non-dll-proxy (unmanaged.dll)
                 Marshal.Prelink(((Action<IntPtr>)CallFromUnmanagedVersion).Method);
                 CallFromUnmanaged = CallFromUnmanagedVersion;
             }
@@ -138,8 +140,9 @@ namespace ModLoader
                     try
                     {
                         AppContext.SetSwitch("System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization", false);
-                        AssemblyLoadContext.Default.LoadFromAssemblyPath(harmonyLib);
+                        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(harmonyLib);
                         Console.WriteLine($"[Mod Preloader] loaded harmony lib from {harmonyLib}");
+                        PatchTitleScren(assembly);
                     }
                     catch (Exception ex)
                     {
@@ -232,6 +235,67 @@ namespace ModLoader
             }
 
             return;
+        }
+
+        /// <summary>
+        /// This function asks harmony to patch Cosmoteer.Gui.TitleScreen() constructor using the transpiler
+        /// 
+        /// It utilizes advanced reflection magic to keep this assembly independent from 0Harmony.dll
+        /// 
+        /// Harmony is still needed, but with this we can load it into context manually.
+        /// Also it won't fail if for some reason harmony is not found.
+        /// </summary>
+        /// <param name="harmony">Loaded harmony assembly</param>
+        static void PatchTitleScren(Assembly harmony)
+        {
+            var classHarmony = harmony.GetType("HarmonyLib.Harmony");
+            var classHarmonyMethod = harmony.GetType("HarmonyLib.HarmonyMethod");
+
+            var classHarmonyConstructor = classHarmony?.GetConstructor([typeof(string)]);
+            var harmonyMethodConstructor = classHarmonyMethod?.GetConstructor([typeof(MethodInfo)]);
+            var methodToPatch = typeof(Cosmoteer.Gui.TitleScreen).GetConstructor([]);
+
+            var harmonyPatchMethod = classHarmony?.GetMethod("Patch");
+            var transpilerMethodInfo = typeof(ModLoader).GetMethod(nameof(Transpiler), BindingFlags.Static | BindingFlags.NonPublic);
+            var transpilerHarmonyMethod = harmonyMethodConstructor?.Invoke([transpilerMethodInfo]);
+
+            var harmonyObj = classHarmonyConstructor?.Invoke(["Cosmoteer.ModLoader"]);
+            harmonyPatchMethod?.Invoke(harmonyObj, [methodToPatch, null, null, transpilerHarmonyMethod, null]);
+        }
+
+        /// <summary>
+        /// Patches Cosmoteer.Gui.TitleScreen() constructor by replacing the game version string.
+        /// 
+        /// Accesses all the Harmony stuff via reflection, to not depend on the assembly directly.
+        /// </summary>
+        private static IEnumerable<object> Transpiler(IEnumerable<object> instructions)
+        {
+            // instruction to replace:
+            // 889	0C20	ldstr	"{game version}"
+            FieldInfo? opCodeField = null;
+            FieldInfo? operandField = null;
+            // cosmoteer declares game version as const, so we need to extract it through reflection, otherwise compiler will evaluate it at compile time
+            var gameVersion = typeof(Cosmoteer.Versions).GetField(nameof(Cosmoteer.Versions.GameVersionBuild))?.GetValue(null) as string ?? string.Empty;
+            foreach (var instruction in instructions)
+            {
+                if (opCodeField == null)
+                    opCodeField = instruction.GetType().GetField("opcode");
+
+                var opCode = opCodeField?.GetValue(instruction);
+
+                if (opCode != null && (System.Reflection.Emit.OpCode)opCode == System.Reflection.Emit.OpCodes.Ldstr)
+                {
+                    if (operandField == null)
+                        operandField = instruction.GetType().GetField("operand");
+                    var operand = operandField?.GetValue(instruction);
+                    if (gameVersion == (operand as string))
+                    {
+                        operandField?.SetValue(instruction, $"{operand} with ModLoader ver. {Assembly.GetExecutingAssembly().GetName().Version}");
+                    }
+                }
+            }
+
+            return instructions;
         }
 
     }

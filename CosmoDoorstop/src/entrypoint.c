@@ -1,7 +1,6 @@
 #include "wincrt.h"
 #include "logger.h"
 #include "hook.h"
-#include "proxy/proxy.h"
 
 #define INIT_FUNCTION "hostfxr_main_startupinfo"
 
@@ -129,9 +128,6 @@ BOOL WINAPI DllEntry(HINSTANCE hInstDll, DWORD reasonForDllLoad,
     LOG("Application dir: %s", paths.app_dir);
     LOG("Doorstop library path: %s", paths.doorstop_path);
     LOG("Doorstop library name: %s", paths.doorstop_filename);
-
-    load_proxy(paths.doorstop_filename);
-    LOG("Proxy loaded");
 
     inject();
 

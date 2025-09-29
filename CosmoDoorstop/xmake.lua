@@ -12,7 +12,7 @@ option("include_logging")
 target("cosmodoorstop")
     set_kind("shared")
     set_optimize("smallest")
-    set_basename("avrt")
+    set_basename("winmm")
     add_options("include_logging")
     local load_events = {}
 
@@ -23,6 +23,7 @@ target("cosmodoorstop")
 	add_rc(load_events, info)
 
 	add_files("src/*.c")
+    add_files("src/unmanaged.def")
 	add_defines("UNICODE")
 	add_links("shell32", "kernel32", "user32")
 

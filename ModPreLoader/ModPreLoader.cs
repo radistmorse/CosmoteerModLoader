@@ -5,6 +5,11 @@ namespace ModPreLoader
 {
     public class ModPreLoader
     {
+        /// <summary>
+        /// Mod pre-loader is needed to decouple game entry point with cosmoteer.dll.
+        /// We load cosmoteer assembly from another file, so that ModLoader could be
+        /// loaded into the context without the name conflict
+        /// </summary>
         [STAThread]
         static public void Main(string[] argv)
         {
