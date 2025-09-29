@@ -156,7 +156,6 @@ namespace ModLoader
                 {
                     try
                     {
-                        AssemblyName.GetAssemblyName(lib);
                         var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(lib);
                         Console.WriteLine($"[Mod Preloader] loaded mod lib from {lib}");
 
