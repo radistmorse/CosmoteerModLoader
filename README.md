@@ -10,7 +10,7 @@ The native C project is built using xmake. Rename the lib into winmm.dll.
 
 ## Usage
 
-Put both libs into the astroneer Bin folder.
+Put both libs into the Cosmoteer Bin folder.
 
 ## Mod development
 
