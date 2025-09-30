@@ -8,6 +8,8 @@
     <OutputType>Exe</OutputType>
     <StartupObject>ModPreLoader.ModPreLoader</StartupObject>
     <Configurations>Release</Configurations>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
   </PropertyGroup>
 
 </Project>

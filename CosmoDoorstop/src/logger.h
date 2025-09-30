@@ -12,7 +12,7 @@ extern HANDLE log_handle;
 extern char_t buffer[4096];
 
 static inline void init_logger(char_t *path) {
-    printf(buffer, TEXT("\\\\\?\\%s\\doorstop_%lx.log"), path, GetTickCount());
+    printf(buffer, TEXT("\\\\\?\\%s\\cosmodoorstop_%lx.log"), path, GetTickCount());
     log_handle = CreateFile(buffer, GENERIC_WRITE, FILE_SHARE_READ, NULL,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 }

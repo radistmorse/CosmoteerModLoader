@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 namespace ModLoader
 {
 
@@ -58,147 +60,187 @@ namespace ModLoader
         [STAThread]
         static public void Main(string[] argv)
         {
-            Task DelayedInitializer = Task.CompletedTask;
-            if (!Cosmoteer.GameApp.IsNoModsMode)
-            {
-                // we need steam to get steamid for the settings file location
-                Cosmoteer.Steamworks.Steam.Init();
-                // we need to remove the callback that was added by init, or the game will not launch
-                // (it will try to add it again)
-                foreach (var callback in Cosmoteer.Steamworks.Steam.s_callbacks.Select(pair => pair.Value as IDisposable))
-                    callback?.Dispose();
-                Cosmoteer.Steamworks.Steam.s_callbacks.Clear();
+            var task = LoadLibs();
 
-                // also needed for settings file location
-                Halfling.App.Platform = Halfling.Platforms.Platform.Create();
-                var settingsFile = new Halfling.ObjectText.OTFile(Cosmoteer.Paths.SettingsFile);
-
-                // I have no idea how to output it more conveniently
-                // Cosmoteer logging is very hard to initialize without the game itself
-                // for now let's output it to stdout, even though nobody will see it
-                Console.WriteLine($"[Mod Preloader] Reading mod settings from {settingsFile}");
-
-                var serializer = new Halfling.Serialization.ObjectText.ObjectTextSerializer(true);
-                var reader = serializer.CreateGenericSerialReader(settingsFile.MakeAtPath("GameSettings"));
-                var enabledMods = reader.ReadFromPath<HashSet<Halfling.IO.AbsolutePath>>(nameof(Cosmoteer.Settings.EnabledMods));
-
-                // populate the dictionary with the already-loaded assemblies (i.e. ModLoader itself)
-                var libs = AssemblyLoadContext.Default.Assemblies.Select(ass => ass.GetName().Name??"")
-                                                                 .Where(name => name.Length > 0)
-                                                                 .ToDictionary(name => name, name=> "");
-                string? harmonyLib = null;
-                Version? harmonyVer = null;
-
-                foreach (var mod in enabledMods)
-                {
-                    Console.WriteLine($"[Mod Preloader] Found enabled mod dir {mod}");
-
-                    foreach (var file in Directory.EnumerateFiles(mod, "*.dll", SearchOption.AllDirectories))
-                    {
-                        Console.WriteLine($"[Mod Preloader] found dll file {file}");
-
-                        try
-                        {
-                            // we first try to load assembly name
-                            // if we try to load the assembly right away, it can corrupt
-                            // the context and throw an uncachable exeption. if we can get
-                            // the name that at least means that the dll is a manageable
-                            // assembly, and we can attempt to load it
-                            var name = AssemblyName.GetAssemblyName(file);
-                            if (name.Name == "0Harmony")
-                            {
-                                // pick the latest harmony version, if several are found
-                                if (harmonyVer == null || harmonyVer < name.Version) {
-                                    harmonyLib = file;
-                                    harmonyVer = name.Version;
-                                }
-                            }
-                            else
-                            {
-                                if (name.Name != null)
-                                {
-                                    if (!libs.TryGetValue(name.Name, out string? value))
-                                    {
-                                        libs.Add(name.Name, file);
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"Library {file} duplicates another library {value}, ignored");
-                                    }
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[Mod Preloader] failed to load lib from {file}, exception\n{ex}");
-                        }
-                    }
-                }
-
-                if (harmonyLib != null)
-                {
-                    try
-                    {
-                        AppContext.SetSwitch("System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization", false);
-                        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(harmonyLib);
-                        Console.WriteLine($"[Mod Preloader] loaded harmony lib from {harmonyLib}");
-                        PatchTitleScren(assembly);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[Mod Preloader] failed to load harmony lib from {harmonyLib}, exception\n{ex}");
-                    }
-                }
-
-                var delayedInitMethods = new Dictionary<MethodInfo, string>();
-
-                foreach (var lib in libs.Values.Where(lib => lib.Length > 0))
-                {
-                    try
-                    {
-                        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(lib);
-                        Console.WriteLine($"[Mod Preloader] loaded mod lib from {lib}");
-
-                        foreach (var type in assembly.GetTypes())
-                        {
-                            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
-                            {
-                                if (method.Name == "AssemblyLoadInitializer" && method.GetParameters().Length == 0 && method.ReturnType == typeof(void))
-                                {
-                                    // EML required a special attribute, which prevents calling from managed code
-                                    if (method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>() == null)
-                                    {
-                                        method.Invoke(null, null);
-                                        Console.WriteLine($"[Mod Preloader] called init method {method.Name} for mod lib {lib}");
-                                    }
-                                    else
-                                    {
-                                        CallFromUnmanaged(method.MethodHandle.GetFunctionPointer());
-                                        Console.WriteLine($"[Mod Preloader] called unmanaged init method {method.Name} for mod lib {lib}");
-                                    }
-                                }
-
-                                if ((method.Name == "GameLoadInitializer" || method.Name == "InitializePatches") && method.GetParameters().Length == 0 && method.ReturnType == typeof(void))
-                                {
-                                    delayedInitMethods.Add(method, lib);
-                                }
-
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex}");
-                    }
-                }
-                // start the async task for delayed initialization
-                DelayedInitializer = DelayedInit(delayedInitMethods);
-            }
             // start the actual game
             Cosmoteer.GameApp.Main(argv);
-
             // close the task
-            DelayedInitializer.Wait();
+            task.Wait();
+        }
+
+        static public Task LoadLibs()
+        {
+            if (Cosmoteer.GameApp.IsNoModsMode)
+            {
+                return Task.CompletedTask;
+            }
+
+            // we need steam to get steamid for the settings file location
+            Cosmoteer.Steamworks.Steam.Init();
+            // we need to remove the callback that was added by init, or the game will not launch
+            // (it will try to add it again)
+            foreach (var callback in Cosmoteer.Steamworks.Steam.s_callbacks.Select(pair => pair.Value as IDisposable))
+                callback?.Dispose();
+            Cosmoteer.Steamworks.Steam.s_callbacks.Clear();
+
+            // also needed for settings file location
+            Halfling.App.Platform = Halfling.Platforms.Platform.Create();
+
+
+            Directory.CreateDirectory(Cosmoteer.Paths.LogsFolder);
+            var loggerWriter = Halfling.Logging.Logger.SetupLogOutputFile(Cosmoteer.Paths.LogsFolder / $"log{DateTime.Now:yyyy-MM-dd HH_mm_ss}_modloader.txt");
+
+            // if no settings file exists, no mods are enabled, skip the load
+            if (!File.Exists(Cosmoteer.Paths.SettingsFile))
+            {
+                Halfling.Logging.Logger.Log($"Setting file not found: {Cosmoteer.Paths.SettingsFile}\nMod loading will not continue.");
+                Halfling.Logging.Logger.UnregisterLogOutputWriter(loggerWriter);
+                return Task.CompletedTask;
+            }
+            var settingsFile = new Halfling.ObjectText.OTFile(Cosmoteer.Paths.SettingsFile);
+
+            Halfling.Logging.Logger.Log($"Reading mod settings from {settingsFile}");
+
+            var serializer = new Halfling.Serialization.ObjectText.ObjectTextSerializer(true);
+            var reader = serializer.CreateGenericSerialReader(settingsFile.MakeAtPath("GameSettings"));
+            var enabledMods = reader.ReadFromPath<HashSet<Halfling.IO.AbsolutePath>>(nameof(Cosmoteer.Settings.EnabledMods));
+
+            // populate the dictionary with the already-loaded assemblies (i.e. ModLoader itself)
+            var libs = AssemblyLoadContext.Default.Assemblies.Select(ass => ass.GetName().Name ?? string.Empty)
+                                                             .Where(name => name.Length > 0)
+                                                             .ToDictionary(name => name, name => string.Empty);
+            string? harmonyLib = null;
+            Version? harmonyVer = null;
+
+            foreach (var mod in enabledMods)
+            {
+                if (Directory.Exists(mod))
+                {
+                    Halfling.Logging.Logger.Log($"Found enabled mod dir {mod}");
+                } else
+                {
+                    Halfling.Logging.Logger.Log($"Non-existing mod dir ignored {mod}");
+                    continue;
+                }
+
+                foreach (var file in Directory.EnumerateFiles(mod, "*.dll", SearchOption.AllDirectories))
+                {
+                    Halfling.Logging.Logger.Log($"found dll file {file}");
+
+                    try
+                    {
+                        // we first try to load assembly name
+                        // if we try to load the assembly right away, it can corrupt
+                        // the context and throw an uncachable exeption. if we can get
+                        // the name that at least means that the dll is a manageable
+                        // assembly, and we can attempt to load it
+                        var name = AssemblyName.GetAssemblyName(file);
+                        if (name.Name == "0Harmony")
+                        {
+                            // pick the latest harmony version, if several are found
+                            if (harmonyVer == null || harmonyVer < name.Version)
+                            {
+                                harmonyLib = file;
+                                harmonyVer = name.Version;
+                                Halfling.Logging.Logger.Log($"Found Harmony lib with newer version {harmonyVer}");
+                            }
+                        }
+                        else
+                        {
+                            if (name.Name != null)
+                            {
+                                if (!libs.TryGetValue(name.Name, out string? value))
+                                {
+                                    libs.Add(name.Name, file);
+                                }
+                                else
+                                {
+                                    if (value.Length == 0)
+                                    {
+                                        Halfling.Logging.Logger.Log($"Library {file} duplicates a mod loader library, ignored");
+                                    }
+                                    else
+                                    {
+                                        Halfling.Logging.Logger.Log($"Library {file} duplicates another library {value}, ignored");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Halfling.Logging.Logger.Log($"failed to load lib from {file}, exception\n{ex.Message}");
+                    }
+                }
+            }
+
+            // if no harmony found, that means the mod loader is disabled or broken
+            // skip the load, some libs might break anyway
+            if (harmonyLib == null)
+            {
+                Halfling.Logging.Logger.Log($"Harmony lib not found.\nMod loading will not continue.");
+                Halfling.Logging.Logger.UnregisterLogOutputWriter(loggerWriter);
+                return Task.CompletedTask;
+            }
+
+            try
+            {
+                AppContext.SetSwitch("System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization", false);
+                var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(harmonyLib);
+                Halfling.Logging.Logger.Log($"loaded harmony lib from {harmonyLib}");
+                PatchTitleScren(assembly);
+            }
+            catch (Exception ex)
+            {
+                Halfling.Logging.Logger.Log($"failed to load harmony lib from {harmonyLib}, exception\n{ex.Message}");
+            }
+
+            var delayedInitMethods = new Dictionary<MethodInfo, string>();
+
+            foreach (var lib in libs.Values.Where(lib => lib.Length > 0))
+            {
+                try
+                {
+                    var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(lib);
+                    Halfling.Logging.Logger.Log($"loaded mod lib from {lib}");
+
+                    foreach (var type in assembly.GetTypes())
+                    {
+                        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                        {
+                            if (method.Name == "AssemblyLoadInitializer" && method.GetParameters().Length == 0 && method.ReturnType == typeof(void))
+                            {
+                                // EML required a special attribute, which prevents calling from managed code
+                                if (method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>() == null)
+                                {
+                                    method.Invoke(null, null);
+                                    Halfling.Logging.Logger.Log($"called init method {method.Name} for mod lib {lib}");
+                                }
+                                else
+                                {
+                                    CallFromUnmanaged(method.MethodHandle.GetFunctionPointer());
+                                    Halfling.Logging.Logger.Log($"called unmanaged init method {method.Name} for mod lib {lib}");
+                                }
+                            }
+
+                            if ((method.Name == "GameLoadInitializer" || method.Name == "InitializePatches") && method.GetParameters().Length == 0 && method.ReturnType == typeof(void))
+                            {
+                                delayedInitMethods.Add(method, lib);
+                            }
+
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Halfling.Logging.Logger.Log($"failed to load mod lib from {lib}, exception\n{ex.Message}");
+                }
+            }
+
+            // start the async task for delayed initialization
+            Halfling.Logging.Logger.Log("Mod loading complete. Starting the game now.");
+            Halfling.Logging.Logger.UnregisterLogOutputWriter(loggerWriter);
+            return DelayedInit(delayedInitMethods);
         }
 
         /// <summary>
@@ -215,21 +257,20 @@ namespace ModLoader
             {
                 try
                 {
-                    // here the logger is already initialized
                     if (method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>() == null)
                     {
                         method.Invoke(null, null);
-                        Halfling.Logging.Logger.Log($"[Mod Preloader] called delayed init method {method.Name} for mod lib {lib}");
+                        Halfling.Logging.Logger.Log($"called delayed init method {method.Name} for mod lib {lib}");
                     }
                     else
                     {
                         CallFromUnmanaged(method.MethodHandle.GetFunctionPointer());
-                        Halfling.Logging.Logger.Log($"[Mod Preloader] called delayed unmanaged init method {method.Name} for mod lib {lib}");
+                        Halfling.Logging.Logger.Log($"called delayed unmanaged init method {method.Name} for mod lib {lib}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Halfling.Logging.Logger.Log($"[Mod Preloader] failed to load mod lib from {lib}, exception\n{ex}");
+                    Halfling.Logging.Logger.Log($"failed to load mod lib from {lib}, exception\n{ex.Message}");
                 }
             }
 
@@ -289,7 +330,7 @@ namespace ModLoader
                     var operand = operandField?.GetValue(instruction);
                     if (gameVersion == (operand as string))
                     {
-                        operandField?.SetValue(instruction, $"{operand} with ModLoader ver. {Assembly.GetExecutingAssembly().GetName().Version}");
+                        operandField?.SetValue(instruction, $"{operand} with YAML ver. {Assembly.GetExecutingAssembly().GetName().Version}");
                     }
                 }
             }
