@@ -4,8 +4,8 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 namespace ModLoader
 {
 
@@ -197,6 +197,10 @@ namespace ModLoader
 
             var delayedInitMethods = new Dictionary<MethodInfo, string>();
 
+            static bool isMethodPreInit(MethodInfo method) => method.Name == "AssemblyLoadInitializer" && method.GetParameters().Length == 0 && method.ReturnType == typeof(void);
+            static bool isMethodPostInit(MethodInfo method) => method.Name == "GameLoadInitializer" && method.GetParameters().Length == 0 && method.ReturnType == typeof(void);
+            static bool isMethodEMLInit(MethodInfo method) => method.Name == "InitializePatches" && method.GetParameters().Length == 0; // EML doesn't require void return
+
             foreach (var lib in libs.Values.Where(lib => lib.Length > 0))
             {
                 try
@@ -206,9 +210,9 @@ namespace ModLoader
 
                     foreach (var type in assembly.GetTypes())
                     {
-                        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
                         {
-                            if (method.Name == "AssemblyLoadInitializer" && method.GetParameters().Length == 0 && method.ReturnType == typeof(void))
+                            if (isMethodPreInit(method))
                             {
                                 // EML required a special attribute, which prevents calling from managed code
                                 if (method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>() == null)
@@ -223,7 +227,7 @@ namespace ModLoader
                                 }
                             }
 
-                            if ((method.Name == "GameLoadInitializer" || method.Name == "InitializePatches") && method.GetParameters().Length == 0 && method.ReturnType == typeof(void))
+                            if (isMethodPostInit(method) || isMethodEMLInit(method))
                             {
                                 delayedInitMethods.Add(method, lib);
                             }

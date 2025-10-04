@@ -4,7 +4,7 @@ function build_info()
         description = ".NET start interceptor for Cosmoteer",
         version = {
             major = 1,
-            minor = 2,
+            minor = 3,
             patch = 0,
             release = "",
         },
