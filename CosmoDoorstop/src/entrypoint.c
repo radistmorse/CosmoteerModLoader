@@ -81,8 +81,6 @@ int init_function_intercept(const int argc, const char_t** argv,
 bool_t initialized = FALSE;
 void *WINAPI get_proc_address_detour(void *module, char *name) {
 
-    LOG("Captured %S at %p", name, module);
-
     // If the lpProcName pointer contains an ordinal rather than a string,
     // high-word value of the pointer is zero (see Doorstop PR #66)
     if (HIWORD(name) && lstrcmpA(name, INIT_FUNCTION) == 0) {
@@ -90,7 +88,7 @@ void *WINAPI get_proc_address_detour(void *module, char *name) {
             initialized = TRUE;
             LOG("Got %S at %p", name, module);
 			hostfxr_main_startupinfo = (void *)GetProcAddress(module, INIT_FUNCTION);
-            LOG("Loaded runtime function\n")
+            LOG("Loaded runtime function")
         }
         return (void *)(init_function_intercept);
     }

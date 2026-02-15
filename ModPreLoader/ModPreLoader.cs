@@ -1,8 +1,8 @@
 ﻿using System.Reflection;
 using System.Runtime.Loader;
 
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 namespace ModPreLoader
 {
     public class ModPreLoader
@@ -19,19 +19,17 @@ namespace ModPreLoader
             var origFile = Path.GetFullPath(Path.Combine(dir, "Cosmoteer_o.dll"));
             var modLoaderFile = Path.GetFullPath(Path.Combine(dir, "ModLoader.dll"));
 
-            Assembly? assembly = null;
-            try
+            AssemblyName.GetAssemblyName(origFile);
+            AssemblyName.GetAssemblyName(modLoaderFile);
+            AssemblyLoadContext.Default.LoadFromAssemblyPath(origFile);
+            var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(modLoaderFile);
+
+            if (assembly.EntryPoint == null)
             {
-                AssemblyName.GetAssemblyName(origFile);
-                AssemblyName.GetAssemblyName(modLoaderFile);
-                AssemblyLoadContext.Default.LoadFromAssemblyPath(origFile);
-                assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(modLoaderFile);
+                throw new DllNotFoundException("ModLoader dll doesn't have an entry point.");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
-            assembly?.EntryPoint?.Invoke(null, [argv]);
+
+            assembly.EntryPoint?.Invoke(null, [argv]);
         }
     }
 }
