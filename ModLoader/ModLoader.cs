@@ -258,16 +258,18 @@ namespace ModLoader
                 foreach (var mod in enabledMods)
                 {
                     var file = LoadLibsForFolder(mod);
-                    if (harmonyLib == null)
+                    if (file != null)
                     {
-                        harmonyLib = file;
-                        Halfling.Logging.Logger.Log($"Found Harmony lib {file}");
+                        if (harmonyLib == null)
+                        {
+                            harmonyLib = file;
+                            Halfling.Logging.Logger.Log($"Found Harmony lib {file}");
+                        }
+                        else
+                        {
+                            Halfling.Logging.Logger.Log($"Found duplicated Harmony lib {file}, ignored");
+                        }
                     }
-                    else
-                    {
-                        Halfling.Logging.Logger.Log($"Found duplicated Harmony lib {file}, ignored");
-                    }
-
                 }
 
                 // if no harmony found, that means the mod loader is disabled or broken
