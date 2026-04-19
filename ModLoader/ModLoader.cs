@@ -5,8 +5,8 @@ using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
-[assembly: AssemblyVersion("1.4.0.0")]
-[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.4.1.0")]
+[assembly: AssemblyFileVersion("1.4.1.0")]
 namespace ModLoader
 {
 
@@ -14,7 +14,7 @@ namespace ModLoader
     {
         // Guid for harmony 2.4.1.0
         // Must be updated if another version of the library is shipped
-        private static readonly Guid HarmonyGuid = new("9afb3c84-71ec-4324-aa8b-936a59ce71df");
+        private static readonly Guid HarmonyGuid = new("dc2e7251-4b84-4883-90eb-eb05a041522c");
         private static readonly Guid ModLoaderGuid = Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId;
         private static readonly string ModLoaderName = Assembly.GetExecutingAssembly().GetName().Name ?? string.Empty;
 
@@ -161,6 +161,7 @@ namespace ModLoader
                         if (guid != HarmonyGuid)
                         {
                             Halfling.Logging.Logger.Log($"Found harmony library {file} with incorrect GUID");
+                            Halfling.Logging.Logger.Log($"{guid}");
                             Halfling.Logging.Logger.Log($"The file loading is disabled for security reasons");
                             continue;
                         }
