@@ -20,10 +20,11 @@ namespace ModLoader
 
         private static Dictionary<MethodInfo, Guid> DelayedInitMethods = [];
 
-        private static Dictionary<Guid, (string file, bool duplicated, bool consented, string? error)> LibraryFiles = [];
+        private static Dictionary<Guid, (string file, bool duplicated, bool consented, bool fromTrusted, string? error)> LibraryFiles = [];
         private static Dictionary<Halfling.IO.AbsolutePath, HashSet<Guid>> ModFolders = [];
         private static HashSet<Guid> KnownModLibraries = [];
         private static HashSet<Guid> LibrariesInContext = [];
+        private static HashSet<Halfling.IO.AbsolutePath> TrustedMods = [];
         private static bool showErrorMessageOnce = false;
 
         /// <summary>
@@ -169,20 +170,24 @@ namespace ModLoader
                     }
                     else
                     {
-                        if (KnownModLibraries.Contains(guid))
+                        if (TrustedMods.Contains(mod))
                         {
-                            LibraryFiles.Add(guid, (file: file, duplicated: false, consented: true, error: default));
+                            LibraryFiles.Add(guid, (file: file, duplicated: false, consented: true, fromTrusted: true, error: default));
+                        }
+                        else if (KnownModLibraries.Contains(guid))
+                        {
+                            LibraryFiles.Add(guid, (file: file, duplicated: false, consented: true, fromTrusted: false, error: default));
                         }
                         else
                         {
                             if (name.Name == ModLoaderName)
                             {
-                                LibraryFiles.Add(guid, (file: file, duplicated: false, consented: false, error: $"Unknown library {Path.GetFileName(file)}, it appears to be a newer version of the ModLoader, please repeat the installation procedure"));
+                                LibraryFiles.Add(guid, (file: file, duplicated: false, consented: false, fromTrusted: false, error: $"Unknown library {Path.GetFileName(file)}, it appears to be a newer version of the ModLoader, please repeat the installation procedure"));
                                 Halfling.Logging.Logger.Log($"Library {file} is not in the list of known assemblies, ignored");
                             }
                             else
                             {
-                                LibraryFiles.Add(guid, (file: file, duplicated: false, consented: false, error: $"Unknown library {Path.GetFileName(file)}, please go to the mod page to trust it"));
+                                LibraryFiles.Add(guid, (file: file, duplicated: false, consented: false, fromTrusted: false, error: $"Unknown library {Path.GetFileName(file)}, please go to the mod page to trust it"));
                                 Halfling.Logging.Logger.Log($"Library {file} is not in the list of known assemblies, ignored");
                             }
                         }
@@ -253,6 +258,10 @@ namespace ModLoader
                 {
                     KnownModLibraries = [.. reader.ReadFromPath<string[]>(nameof(KnownModLibraries)).Select(guid => new Guid(guid))];
                 }
+                if (reader.HasPath(nameof(TrustedMods)))
+                {
+                    TrustedMods = reader.ReadFromPath<HashSet<Halfling.IO.AbsolutePath>>(nameof(TrustedMods));
+                }
 
                 string? harmonyLib = null;
 
@@ -272,6 +281,13 @@ namespace ModLoader
                         }
                     }
                 }
+
+                // remove known libraries if they contain something that was removed since last launch
+                // if some mod was disabled it will remove that dangling libraries as well
+                KnownModLibraries.IntersectWith(LibraryFiles.Where(kvp => kvp.Value.fromTrusted == false).Select(kvp => kvp.Key));
+
+                // remove trusted mods that were disabled or removed
+                TrustedMods.IntersectWith(enabledMods.Where(mod => Directory.Exists(mod)));
 
                 // if no harmony found, that means the mod loader is disabled or broken
                 // skip the load, some libs might break anyway
@@ -515,6 +531,21 @@ namespace ModLoader
         }
 
         /// <summary>
+        /// Callback for the "Trust Mod" button, adds mod to the list of trusted
+        /// </summary>
+        private static void OnTrustModButtonClicked(object? sender, EventArgs e)
+        {
+            if (sender is Halfling.Gui.Components.Selection.WidgetTriggeredSelectionController controller && controller.Widget?.UserData is Halfling.IO.AbsolutePath folder)
+            {
+                if (controller.IsSelected)
+                    TrustedMods.Add(folder);
+                else
+                    TrustedMods.Remove(folder);
+            }
+        }
+
+
+        /// <summary>
         /// Patches Cosmoteer.Gui.ModsDialog.OnModSelected
         /// 
         /// Tries to find mod libraries if they are not in the list
@@ -578,17 +609,35 @@ namespace ModLoader
                 }
                 if (libsUnknown.Length != 0)
                 {
-                    var btn = new Halfling.Gui.Button(Cosmoteer.Gui.WidgetRules.Instance.GoodButton);
-                    btn.PercentileRect = new Halfling.Geometry.Rect(0f, 0f, 50f, 10f);
-                    btn.Right = -5f;
-                    btn.TextProvider = Cosmoteer.Localization.Strings.KeyString("ModLoader/trust");
-                    btn.SelfActive = true;
-                    btn.SelfInputActive = libsUnknownStill;
-                    btn.UserData = modInfo.Folder;
+                    var btn = new Halfling.Gui.Button(Cosmoteer.Gui.WidgetRules.Instance.GoodButton)
+                    {
+                        PercentileRect = new Halfling.Geometry.Rect(0f, 0f, 50f, 10f),
+                        Right = -5f,
+                        TextProvider = Cosmoteer.Localization.Strings.KeyString("ModLoader/trust"),
+                        SelfActive = true,
+                        SelfInputActive = libsUnknownStill && !TrustedMods.Contains(modInfo.Folder),
+                        UserData = modInfo.Folder
+                    };
                     btn.Clicked += OnTrustButtonClicked;
                     __instance._descBox.Children.Insert(count, btn);
                     __instance._descBox.Children.Insert(count, FormatLibList(Cosmoteer.Localization.Strings.GetText("ModLoader/libsUnknown"), "bad", libsUnknown));
                 }
+                if (modInfo.Folder.IsSubPathOf(Cosmoteer.Paths.UserModsFolder))
+                {
+                    var modBtn = new Halfling.Gui.ToggleButton(Cosmoteer.Gui.WidgetRules.Instance.ToggleCheckButton)
+                    {
+                        PercentileRect = new Halfling.Geometry.Rect(0f, 0f, 50f, 10f),
+                        Right = -5f,
+                        TextProvider = Cosmoteer.Localization.Strings.KeyString("ModLoader/trustMod"),
+                        SelfActive = true,
+                        IsSelected = TrustedMods.Contains(modInfo.Folder),
+                        SelfInputActive = true,
+                        UserData = modInfo.Folder
+                    };
+                    modBtn.SelectionChanged += OnTrustModButtonClicked;
+                    __instance._descBox.Children.Insert(1, modBtn);
+                }
+
             }
         }
 
@@ -631,12 +680,20 @@ namespace ModLoader
         private static void SettingsWritePostfix(Halfling.Serialization.Generic.GenericSerialWriter writer)
         {
             // remove the libraries that are no longer present
-            KnownModLibraries.IntersectWith(LibraryFiles.Keys);
+            KnownModLibraries.IntersectWith(LibraryFiles.Where(kvp => kvp.Value.fromTrusted == false).Select(kvp => kvp.Key));
+
+            // remove the mods that are not enabled
+            TrustedMods.IntersectWith(Cosmoteer.Settings.EnabledMods);
 
             if (KnownModLibraries.Count > 0)
             {
                 writer.WriteToPath(nameof(KnownModLibraries), KnownModLibraries.Select(guid => guid.ToString()).ToArray());
             }
+            if (TrustedMods.Count > 0)
+            {
+                writer.WriteToPath(nameof(TrustedMods), TrustedMods);
+            }
+
         }
 
         /// <summary>
