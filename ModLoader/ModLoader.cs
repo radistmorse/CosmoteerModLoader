@@ -5,8 +5,8 @@ using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
-[assembly: AssemblyVersion("1.4.1.0")]
-[assembly: AssemblyFileVersion("1.4.1.0")]
+[assembly: AssemblyVersion("1.4.1.1")]
+[assembly: AssemblyFileVersion("1.4.1.1")]
 namespace ModLoader
 {
 
@@ -470,9 +470,9 @@ namespace ModLoader
         /// 
         /// Adds errors caught from mod libs to the errorList
         /// </summary>
-        private static void ModListPostfix(ref List<Cosmoteer.Mods.ModInfo> __result, IList<ValueTuple<string, string>> errorList)
+        private static void ModListPostfix(ref List<Cosmoteer.Mods.ModInfo> __result, IList<(string ModID, string Error)>? errorList)
         {
-            if (showErrorMessageOnce)
+            if (showErrorMessageOnce || errorList == null)
             {
                 return;
             }
@@ -486,7 +486,7 @@ namespace ModLoader
                         var error = LibraryFiles[guid].error;
                         if (error != null)
                         {
-                            errorList.Add(new ValueTuple<string, string>(mod.ID, error));
+                            errorList.Add((mod.ID, error));
                         }
                     }
                 }
