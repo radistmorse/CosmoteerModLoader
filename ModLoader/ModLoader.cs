@@ -187,7 +187,7 @@ namespace ModLoader
                             }
                             else
                             {
-                                LibraryFiles.Add(guid, (file: file, duplicated: false, consented: false, fromTrusted: false, error: $"Unknown library {Path.GetFileName(file)}, please go to the mod page to trust it"));
+                                LibraryFiles.Add(guid, (file: file, duplicated: false, consented: false, fromTrusted: false, error: $"Unknown library {Path.GetFileName(file)}, open the mods list and trust the libraries for the relevant mod"));
                                 Halfling.Logging.Logger.Log($"Library {file} is not in the list of known assemblies, ignored");
                             }
                         }
